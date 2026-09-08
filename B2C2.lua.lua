@@ -2849,12 +2849,12 @@ end)
 
 
 -- ====================================================================
--- CreateToggle: Nure ESP (Hitboxes & Body Parts)
+-- CreateToggle: Nure ESP (Strict Exact Case: HITBOX & HEADHITBOX Only)
 -- ====================================================================
 local espEnabled = false
 local espHighlights = {}
 
-createToggle("Section 5", "Nure ESP (Hitboxes)", "Naglalagay ng Highlight sa lahat ng Hitboxes at Buntot ni Nure", function(state)
+createToggle("Section 5", "Nagisa ESP (Hitboxes)", "Naglalagay ng Highlight eksklusibo sa HITBOX at HEADHITBOX", function(state)
     espEnabled = state
     
     if espEnabled then
@@ -2862,14 +2862,15 @@ createToggle("Section 5", "Nure ESP (Hitboxes)", "Naglalagay ng Highlight sa lah
             while espEnabled do
                 for _, desc in ipairs(workspace:GetDescendants()) do
                     if desc:IsA("BasePart") then
-                        local name = desc.Name:lower()
-                        -- Hanapin ang HEADHITBOX, HITBOX, o mga bahagi ng NureMain/Snake
-                        if name == "headhitbox" or name == "hitbox" or name:find("nure") or name:find("tail") then
+                        -- Saktong pangalan na may tamang capitalization (walang lower)
+                        local name = desc.Name
+                        
+                        if name == "HITBOX" or name == "HEADHITBOX" then
                             if not espHighlights[desc] then
                                 local hl = Instance.new("Highlight")
                                 hl.Adornee = desc
-                                hl.FillColor = Color3.fromRGB(255, 50, 50)
-                                hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                                hl.FillColor = Color3.fromRGB(255, 50, 50)     -- Pula
+                                hl.OutlineColor = Color3.fromRGB(255, 255, 255) -- Puti ang gilid
                                 hl.FillTransparency = 0.4
                                 hl.Parent = desc
                                 espHighlights[desc] = hl
@@ -2877,11 +2878,11 @@ createToggle("Section 5", "Nure ESP (Hitboxes)", "Naglalagay ng Highlight sa lah
                         end
                     end
                 end
-                task.wait(2) -- Refresh every 2 seconds para sa bago mag-load na parts
+                task.wait(2) -- Refresh every 2 seconds para sa mga bagong spawn/load
             end
         end)
     else
-        -- Alisin lahat ng ESP kapag naka-off
+        -- Alisin lahat ng ESP kapag naka-off ang toggle
         for part, hl in pairs(espHighlights) do
             if hl then hl:Destroy() end
         end
@@ -2898,7 +2899,7 @@ end)
 -- ====================================================================
 local autoSafeEnabled = false
 
-createToggle("Section 2", "Auto SafeSpot V2 (Cycle)", "Magte-teleport sa danger kapag 0.5, tapos sa spawn kapag naging 1 (One-time per trigger)", function(state)
+createToggle("Section 5", "Auto SafeSpot Nagisa Poison", "Magte-teleport sa danger kapag 0.5, tapos sa spawn kapag naging 1 (One-time per trigger)", function(state)
     autoSafeEnabled = state
     
     if autoSafeEnabled then
@@ -3005,6 +3006,117 @@ createCustomButton("Section 5", "Auto Collect Cannon Ball (5x)", "Awtomatikong k
         end
     end
 end)
+
+
+-- ====================================================================
+-- CreateToggle: Boss TailHitbox Lock (Dynamic)
+-- ====================================================================
+local tailLockEnabled = false
+
+createToggle("Section 5", "Tail Hitbox Lock", "Awtomatikong sinusundan ang TailHitbox1 ng Boss nang hindi gumagamit ng 0x ID", function(state)
+    tailLockEnabled = state
+    
+    if tailLockEnabled then
+        task.spawn(function()
+            while tailLockEnabled do
+                local player = game:GetService("Players").LocalPlayer
+                local character = player.Character
+                local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+                
+                if rootPart then
+                    local targetPart = nil
+                    
+                    -- Dynamic scan sa buong workspace para sa TailHitbox1
+                    for _, desc in ipairs(workspace:GetDescendants()) do
+                        if desc.Name == "TailHitbox1" and desc:IsA("BasePart") then
+                            targetPart = desc
+                            break
+                        end
+                    end
+                    
+                    if targetPart then
+                        rootPart.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
+                    end
+                end
+                
+                task.wait(0.1) -- Mabilis na pag-update ng posisyon
+            end
+        end)
+    end
+end)
+
+
+
+-- ====================================================================
+-- Custom Button: Get Cutlass (1x Fire)
+-- ====================================================================
+createCustomButton("Section 5", "Get Cutlass", "Awtomatikong kukunin ang Cutlass gamit ang dynamic search (1x Fire)", function()
+    local player = game:GetService("Players").LocalPlayer
+    local workspace = game:GetService("Workspace")
+    
+    local character = player.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    
+    if not rootPart then
+        if type(notify) == "function" then notify("Error", "Wala kang Character/RootPart!", 2) end
+        return
+    end
+    
+    local foundPrompt = false
+    
+    -- Dynamic scan sa buong workspace para hanapin ang Cutlass o ang prompt nito
+    for _, desc in ipairs(workspace:GetDescendants()) do
+        if desc:IsA("ProximityPrompt") then
+            local actionText = tostring(desc.ActionText):lower()
+            local objectText = tostring(desc.ObjectText):lower()
+            local parentName = desc.Parent and desc.Parent.Name:lower() or ""
+            
+            -- I-check kung ito ay tumutugma sa Cutlass / Grab prompt
+            if actionText:find("cutlass") or objectText:find("grab") or parentName:find("cutlass") then
+                local parentPart = desc.Parent
+                
+                -- Kunin ang CFrame ng BasePart o sa loob ng model
+                local targetCFrame = nil
+                if parentPart and parentPart:IsA("BasePart") then
+                    targetCFrame = parentPart.CFrame
+                elseif parentPart and parentPart:IsA("Model") then
+                    local pSuccess, pivot = pcall(function() return parentPart:GetPivot() end)
+                    if pSuccess and pivot then targetCFrame = pivot end
+                end
+                
+                if targetCFrame then
+                    rootPart.CFrame = targetCFrame + Vector3.new(0, 2, 0)
+                    task.wait(0.2)
+                    
+                    -- Isang beses lang i-fire ang prompt
+                    pcall(function()
+                        fireproximityprompt(desc)
+                    end)
+                    
+                    foundPrompt = true
+                    if type(notify) == "function" then
+                        notify("Cutlass", "Matagumpay na nakuha ang Cutlass (1x Fire)!", 2)
+                    end
+                    break
+                end
+            end
+        end
+    end
+    
+    if not foundPrompt then
+        if type(notify) == "function" then
+            notify("Cutlass", "Hindi mahanap ang Cutlass prompt sa paligid.", 2)
+        end
+    end
+end)
+
+
+
+
+
+
+
+
 
 
 -- ====================================================================
