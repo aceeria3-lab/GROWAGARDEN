@@ -3009,41 +3009,144 @@ end)
 
 
 -- ====================================================================
--- CreateToggle: Boss TailHitbox Lock (Dynamic)
+-- Custom Button: Hold to Attack Boss (TP, Equip, Slash, Return)
 -- ====================================================================
-local tailLockEnabled = false
-
-createToggle("Section 5", "Tail Hitbox Lock", "Awtomatikong sinusundan ang TailHitbox1 ng Boss nang hindi gumagamit ng 0x ID", function(state)
-    tailLockEnabled = state
+createCustomButton("Section 2", "Hold Attack Boss", "I-hold para lumipat sa TailHitbox at mag-slash, bitawan para bumalik sa SafeSpot", function(btnObject)
+    local player = game:GetService("Players").LocalPlayer
+    local workspace = game:GetService("Workspace")
+    local runService = game:GetService("RunService")
     
-    if tailLockEnabled then
-        task.spawn(function()
-            while tailLockEnabled do
-                local player = game:GetService("Players").LocalPlayer
-                local character = player.Character
-                local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    local safespotCFrame = CFrame.new(1976.510, 147.665, -4721.051)
+    
+    -- Function para hanapin ang TailHitbox1 nang dynamic (walang 0x ID)
+    local function getTailHitbox()
+        for _, desc in ipairs(workspace:GetDescendants()) do
+            if desc.Name == "TailHitbox1" and desc:IsA("BasePart") then
+                return desc
+            end
+        end
+        return nil
+    end
+    
+    -- Kung ang btnObject ay nagbibigay ng direktang TextButton, ikinakabit natin ang hold events
+    if btnObject and btnObject:IsA("TextButton") then
+        local isHolding = false
+        local holdConnection = nil
+        
+        -- Alisin muna ang mga lumang koneksyon para hindi mag-stack
+        if btnObject:FindFirstChild("HoldConn") then
+            btnObject.HoldConn:Destroy()
+        end
+        
+        local connFolder = Instance.new("Folder")
+        connFolder.Name = "HoldConn"
+        connFolder.Parent = btnObject
+        
+        -- Kapag PININDOT at HINAHAWAKAN
+        local downConn = btnObject.MouseButton1Down:Connect(function()
+            isHolding = true
+            btnObject.Text = "⚔️ ATTACKING..."
+            btnObject.BackgroundColor3 = Color3.fromRGB(50, 160, 80)
+            
+            local character = player.Character
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+            local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+            local backpack = player:FindFirstChild("Backpack")
+            
+            if not rootPart then return end
+            
+            -- 1. Auto-Equip Cutlass mula sa Backpack
+            if backpack then
+                local cutlassTool = backpack:FindFirstChild("Cutlass")
+                if cutlassTool and humanoid then
+                    humanoid:EquipTool(cutlassTool)
+                end
+            end
+            
+            -- 2. Loop habang nakahawak para sumunod sa TailHitbox at mag-slash
+            holdConnection = runService.RenderStepped:Connect(function()
+                if not isHolding then return end
                 
-                if rootPart then
-                    local targetPart = nil
-                    
-                    -- Dynamic scan sa buong workspace para sa TailHitbox1
-                    for _, desc in ipairs(workspace:GetDescendants()) do
-                        if desc.Name == "TailHitbox1" and desc:IsA("BasePart") then
-                            targetPart = desc
-                            break
-                        end
-                    end
-                    
-                    if targetPart then
-                        rootPart.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
+                local currentChars = player.Character
+                local currentRoot = currentChars and currentChars:FindFirstChild("HumanoidRootPart")
+                
+                if currentRoot then
+                    local tailPart = getTailHitbox()
+                    if tailPart then
+                        currentRoot.CFrame = tailPart.CFrame + Vector3.new(0, 3, 0)
                     end
                 end
                 
-                task.wait(0.1) -- Mabilis na pag-update ng posisyon
-            end
+                -- Auto Slash (Activate ang Cutlass tool)
+                local equippedTool = currentChars and currentChars:FindFirstChild("Cutlass")
+                if equippedTool and equippedTool:IsA("Tool") then
+                    pcall(function()
+                        equippedTool:Activate()
+                    end)
+                end
+            end)
         end)
+        
+        -- Function para sa pagbinitaw
+        local function releaseAction()
+            if not isHolding then return end
+            isHolding = false
+            
+            if holdConnection then
+                holdConnection:Disconnect()
+                holdConnection = nil
+            end
+            
+            btnObject.Text = "Hold Attack Boss"
+            btnObject.BackgroundColor3 = Color3.fromRGB(40, 40, 40) -- Ibalik sa default UI color mo kung kailangan
+            
+            -- 3. Teleport pabalik sa SafeSpot kapag binitawan
+            local character = player.Character
+            local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                rootPart.CFrame = safespotCFrame
+            end
+        end
+        
+        local upConn1 = btnObject.MouseButton1Up:Connect(releaseAction)
+        local upConn2 = btnObject.MouseLeave:Connect(releaseAction)
+        
+        -- I-save sa folder para ma-cleanup mamaya
+        downConn.Parent = connFolder
+        upConn1.Parent = connFolder
+        upConn2.Parent = connFolder
+    else
+        -- Fallback kung standard click lang ang kaya ng UI library mo (instant TP, slash, return)
+        local character = player.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+        local backpack = player:FindFirstChild("Backpack")
+        
+        if rootPart then
+            if backpack then
+                local cutlassTool = backpack:FindFirstChild("Cutlass")
+                if cutlassTool and humanoid then
+                    humanoid:EquipTool(cutlassTool)
+                end
+            end
+            
+            local tailPart = getTailHitbox()
+            if tailPart then
+                rootPart.CFrame = tailPart.CFrame + Vector3.new(0, 3, 0)
+                task.wait(0.2)
+                
+                local equippedTool = character:FindFirstChild("Cutlass")
+                if equippedTool and equippedTool:IsA("Tool") then
+                    pcall(function() equippedTool:Activate() end)
+                end
+                
+                task.wait(0.3)
+                rootPart.CFrame = safespotCFrame
+            end
+        end
     end
 end)
+
 
 
 
