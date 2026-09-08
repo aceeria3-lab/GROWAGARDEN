@@ -2894,11 +2894,11 @@ end)
 
 
 -- ====================================================================
--- CreateToggle: Auto SafeSpot (Transparency Based)
+-- CreateToggle: Auto SafeSpot (One-shot per Cycle)
 -- ====================================================================
 local autoSafeEnabled = false
 
-createToggle("Section 5", "Auto SafeSpot (Transparency)", "Awtomatikong magte-teleport batay sa Transparency ng POISON part (0.5 / 1)", function(state)
+createToggle("Section 2", "Auto SafeSpot V2 (Cycle)", "Magte-teleport sa danger kapag 0.5, tapos sa spawn kapag naging 1 (One-time per trigger)", function(state)
     autoSafeEnabled = state
     
     if autoSafeEnabled then
@@ -2906,13 +2906,15 @@ createToggle("Section 5", "Auto SafeSpot (Transparency)", "Awtomatikong magte-te
             local dangerSpot = CFrame.new(1976.510, 147.665, -4721.051)
             local spawnSpot = CFrame.new(1973.085, 58.095, -4772.383)
             
+            local hasBeenTriggered = false -- Para hindi mag-spam
+            
             while autoSafeEnabled do
                 local player = game:GetService("Players").LocalPlayer
                 local character = player.Character
                 local rootPart = character and character:FindFirstChild("HumanoidRootPart")
                 
                 if rootPart then
-                    -- Hanapin ang POISON part at suriin ang Transparency nito
+                    -- Hanapin ang POISON part
                     local poisonPart = nil
                     for _, desc in ipairs(workspace:GetDescendants()) do
                         if desc.Name == "POISON" and desc:IsA("BasePart") then
@@ -2923,15 +2925,20 @@ createToggle("Section 5", "Auto SafeSpot (Transparency)", "Awtomatikong magte-te
                     
                     if poisonPart then
                         local trans = poisonPart.Transparency
-                        if trans == 0.5 then
+                        
+                        -- Kapag naging 0.5, pumunta sa danger spot (isang beses lang kada cycle)
+                        if trans == 0.5 and not hasBeenTriggered then
                             rootPart.CFrame = dangerSpot
-                        elseif trans == 1 then
+                            hasBeenTriggered = true
+                        -- Kapag bumalik sa 1, ibalik sa spawn spot at i-reset ang trigger para sa susunod
+                        elseif trans == 1 and hasBeenTriggered then
                             rootPart.CFrame = spawnSpot
+                            hasBeenTriggered = false
                         end
                     end
                 end
                 
-                task.wait(0.3) -- Mas mabilis na pag-check para sakto sa pagbabago ng transparency
+                task.wait(0.3)
             end
         end)
     end
